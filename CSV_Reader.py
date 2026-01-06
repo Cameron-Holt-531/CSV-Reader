@@ -8,12 +8,14 @@ Description:
     system ingestion (e.g., ERP, CRM imports).
 
 Key Features:
+    - [NEW] Main Stage Filtering: Filter controls moved from sidebar to main view.
+    - [NEW] Sample Data Generator: Instantly creates dummy data for testing.
     - Data Integrity: Forces string encoding to preserve leading zeros in IDs/Zip Codes.
     - Interactive Editing: Allows users to modify cell values directly in the browser.
     - Filter Logic: Dynamic sidebar filtering based on column values.
 
 Author: Cameron Holt
-Version: 2.0.1(Stable)
+Version: 2.1.0 (Stable)
 Dependencies: streamlit, pandas
 """
 
@@ -22,44 +24,89 @@ Dependencies: streamlit, pandas
 import streamlit as st
 import pandas as pd
 
+# --- GENERATE SAMPLE DATA ---
+def generate_sample_data():
+    """Creates a dummy DataFrame to demonstrate app functionality."""
+    data = {
+        'EmployeeID': ['001024', '002055', '003109', '004552', '005110'],
+        'FirstName': ['Alice', 'Bob', 'Charlie', 'Diana', 'Evan'],
+        'LastName': ['Smith', 'Jones', 'Brown', 'Prince', 'Wright'],
+        'Department': ['Accounting', 'IT', 'Sales', 'IT', 'Accounting'],
+        'Status': ['Active', 'Active', 'On Leave', 'Active', 'Terminated'],
+        'Salary': ['55000', '85000', '62000', '90000', '58000']
+    }
+    return pd.DataFrame(data)
+
+
+
 # -- CONFIGURE PAGE ---
 st.set_page_config(page_title='CSV File Reader', layout='wide')
 st.title("CSV Reader")
 
-st.markdown("Upload your CSV, filter by the desired column, and export the output.")
+st.markdown("Upload your CSV to begin.")
 
-#1. File Upload Section
+#1. Data Source Section (Side-by-Side)
+    # Configuring a 4:1 ratio so that the button stays compact to the right.
+col1, col2 = st.columns([4,1])
 
-uploaded_file = st.file_uploader('Upload your CSV File', type =['csv'], label_visibility='collapsed')
+with col1:
+    uploaded_file = st.file_uploader('Upload your CSV File', type =['csv'], label_visibility='collapsed')
+with col2:
+    # Adding vertical whitespace so the button aligns with the input box
+    st.write("")
+    if st.button("Load Sample Data"):
+        st.session_state['sample_data']= generate_sample_data()
 
-# --- ENHANCEMENT: Only run this code if a file is uploaded ---
+# --- Logic: Determine which data to use
+df = None
+
 if uploaded_file is not None:
     # Read the CSV
     df = pd.read_csv(uploaded_file, dtype=str)
     df.index = df.index+1
+    # If a file is uploaded, clear any sample data from the session
+    if 'sample_data' in st.session_state:
+        del st.session_state['sample_data']
     st.subheader(f"Results ({len(df)} rows)")
+
+elif 'sample_data' in st.session_state:
+    df = st.session_state['sample_data']
+    st.info("Using generated sample data.")
+
+if df is not None:
 
 #2. Show the raw data (Expandable to save space)
     with st.expander("View Raw Data"):
         st.write(df)
 
-    #3. Sidebar Filtering Logic
-    st.sidebar.header("Filter Options")
-       
-        # User Selects a column to filter by:
-    column_to_filter = st.sidebar.selectbox("Select a column to filter:", df.columns)
+    st.markdown("### Data Editor")
 
-        # User select a value from that column (unique values only)
-    unique_values = df[column_to_filter].unique()
-    selected_value = st.sidebar.selectbox("Select value:", unique_values)
+
+#3. Main Stage Filtering
+    f_col1, f_col2 = st.columns(2)
+
+    with f_col1:
+    # Placeholder option prevents auto-filtering
+        columns_list =["-- All Columns --"] + list(df.columns)
+        column_to_filter = st.selectbox("Filter by Column:", columns_list)
+
+    # Only show value Selector if a specific column is chosen
+    if column_to_filter != "-- All Columns --":
+        with f_col2:
+            unique_values = df[column_to_filter].unique()
+            selected_value = st.selectbox("Select value:", unique_values)
 
         # Apply the Filter
-    filtered_df = df[df[column_to_filter] == selected_value]
-
-    # 4. Display Filtered Data (Editable)
-    st.subheader(f"Filtered Results ({len(filtered_df)} rows)")
+        filtered_df = df[df[column_to_filter] == selected_value]
     
-        # [V2 Change] Switch to Editable grid
+    else:
+    # No Filter Selected
+        filtered_df = df
+
+    # Dynamic Header Update
+    st.caption(f"Showing ({len(filtered_df)} rows)")
+    
+# 4. Display Data (Editable)
     edited_df = st.data_editor(filtered_df, use_container_width = True, num_rows="dynamic")
 
     #5. Download Button
@@ -73,7 +120,7 @@ if uploaded_file is not None:
 else:
     st.info("Awaiting CSV file upload")
 
-st.markdown("---") # Visual separator for the footer
+    st.markdown("---") # Visual separator for the footer
 
 # --- FOOTER SECTION ---
 with st.container():
