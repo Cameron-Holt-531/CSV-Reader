@@ -1,5 +1,5 @@
 """
-CSV Data Staging Tool (V2.0.1)
+CSV Data Staging Tool (V2.2.0)
 
 Description:
     A Streamlit application designed to assist with data preparation and cleansing.
@@ -7,15 +7,15 @@ Description:
     perform manual inline edits, and export the cleaned data for downstream 
     system ingestion (e.g., ERP, CRM imports).
 
-Key Features:
-    - [NEW] Main Stage Filtering: Filter controls moved from sidebar to main view.
-    - [NEW] Sample Data Generator: Instantly creates dummy data for testing.
-    - Data Integrity: Forces string encoding to preserve leading zeros in IDs/Zip Codes.
-    - Interactive Editing: Allows users to modify cell values directly in the browser.
-    - Filter Logic: Dynamic sidebar filtering based on column values.
+Updates:
+    - [LOGIC] Centralized 'sanitize_data' function.
+    - [LOGIC] Added Header cleanup (trims spaces from column names).
+    - [LOGIC] Added Whitespace Trimming 
+    - [LOGIC] Added Duplicate Removal.
+    - [LOGIC] Added Ghost Row detection (thresh=2).
 
 Author: Cameron Holt
-Version: 2.1.0 (Stable)
+Version: 2.2.0 (Stable)
 Dependencies: streamlit, pandas
 """
 
@@ -24,6 +24,32 @@ Dependencies: streamlit, pandas
 import streamlit as st
 import pandas as pd
 
+# --- Cleaning Functions ---
+def sanitize_data(df):
+    original_df = df.copy() # Store the original state
+
+    # --- Cleaning up Ghost Rows ---
+    df = df.replace(r'^\s*$', pd.NA, regex=True)
+
+    # --- Dropping rows that do not have enough data (Threshold Drop) ---
+    df = df.dropna(thresh=2)
+
+    # --- Whitespace Trimming (Cells) ---
+    df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+
+    # ---Whitespace Trimming (Headers) ---
+    df.columns = df.columns.str.strip()
+
+    # Remove Duplicates
+    df = df.drop_duplicates()
+
+    # Calculate what was removed
+    removed_rows=original_df[~original_df.index.isin(df.index)]
+
+    # Return the results
+    return df, removed_rows
+
+
 # --- GENERATE SAMPLE DATA ---
 def generate_sample_data():
     """Creates a dummy DataFrame to demonstrate app functionality."""
@@ -31,6 +57,7 @@ def generate_sample_data():
         'EmployeeID': ['001024', '002055', '003109', '004552', '005110'],
         'FirstName': ['Alice', 'Bob', 'Charlie', 'Diana', 'Evan'],
         'LastName': ['Smith', 'Jones', 'Brown', 'Prince', 'Wright'],
+        'Email': ['alicesmith@sampleemail.com','bobjones@sampleemail.com','charliebrown@sampleemail.com','dianaprince@sampleemail.com','evanwright@sampleemail.com'],
         'Department': ['Accounting', 'IT', 'Sales', 'IT', 'Accounting'],
         'Status': ['Active', 'Active', 'On Leave', 'Active', 'Terminated'],
         'Salary': ['55000', '85000', '62000', '90000', '58000']
@@ -68,7 +95,20 @@ if uploaded_file is not None:
     if 'sample_data' in st.session_state:
         del st.session_state['sample_data']
     st.subheader(f"Results ({len(df)} rows)")
+    
+    # --- Shared Processing Block ---
+    if df is not None:
+        # Call the cleaning function
+        df, removed_rows=sanitize_data(df)
 
+    # --- Audit Log ---
+        if not removed_rows.empty:
+            st.warning(f"Removed {len(removed_rows)} problematic rows.")
+            with st.expander("See Removed Rows (Audit Log)"):
+                st.dataframe(removed_rows)
+                st.caption("Rows removed due to missing data or duplicates.")
+       
+    
 elif 'sample_data' in st.session_state:
     df = st.session_state['sample_data']
     st.info("Using generated sample data.")
@@ -109,6 +149,7 @@ if df is not None:
 # 4. Display Data (Editable)
     edited_df = st.data_editor(filtered_df, use_container_width = True, num_rows="dynamic")
 
+
     #5. Download Button
     csv_export = edited_df.to_csv(index=False).encode('utf-8')
     st.download_button(
@@ -121,6 +162,8 @@ else:
     st.info("Awaiting CSV file upload")
 
     st.markdown("---") # Visual separator for the footer
+
+
 
 # --- FOOTER SECTION ---
 with st.container():
