@@ -10,7 +10,7 @@ As an Integration Engineer, I frequently encounter raw data that is unfit for do
 * **Automated Sanitization:** * Removes "Ghost Rows" (empty rows often left by Excel).
     * Trims whitespace from headers and cells.
     * Deduplicates records automatically.
-* **Audit Logging:** Generates a downloadable log of rows that were removed/cleaned.
+* **Audit Logging:** Generates a log of rows that were removed/cleaned.
 * **Privacy-First:** Processes data entirely in-memory using Streamlit; no data is stored on disk.
 
 ## Tech Stack
